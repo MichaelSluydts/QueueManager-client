@@ -1,0 +1,18 @@
+#!/usr/bin/env python
+import HighThroughput.manage as HT
+import os,subprocess,sys
+from HighThroughput.communication.mysql import *
+
+server = os.getenv('VSC_INSTITUTE_CLUSTER')
+qstat = subprocess.Popen('qstat | grep R | awk \'{print $1}\' | cut -d. -f1',stdout=subprocess.PIPE,shell=True).communicate()[0].decode().split()
+
+if not isinstance(qstat,str):
+    end = ' AND `jobid` NOT IN (' + ','.join(qstat) + ')'
+
+
+crashes = mysql_query('SELECT `id` FROM `calculations` WHERE `queue` = ' + sys.argv[1] + ' AND `stat` % 2 = 1 AND `server` = \'' + server  + '\'' + end)
+
+if not isinstance(crashes,str):
+    for calc in crashes:
+        print(calc['id'])
+        HT.calculation.restart(calc['id'])

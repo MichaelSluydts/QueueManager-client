@@ -1,0 +1,6 @@
+#!/bin/bash
+
+mkdir $1
+mkdir $1/CALCULATIONS
+mkdir $1/LOGFILES
+mkdir $1/import

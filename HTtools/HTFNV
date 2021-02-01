@@ -1,0 +1,67 @@
+#!/usr/bin/env python
+import warnings
+warnings.filterwarnings("ignore")
+import os, sys, subprocess
+refpot = sys.argv[1]
+eV = float(subprocess.Popen('grep ENCUT OUTCAR | awk \'{print $3}\'',shell=True,stdout=subprocess.PIPE).communicate()[0].decode().strip())
+ecut = eV/13.605698065894 
+
+eps = 16.2
+outcar = 'OUTCAR'
+encut = subprocess.Popen('grep ENCUT  ' + outcar,stdout=subprocess.PIPE,shell=True).communicate()[0].decode().strip().split()[2]
+species = subprocess.Popen('grep POTCAR: ' + outcar + ' |  gawk -- \'{ if (!a[$0]++) b[c++] = $0; } END { for (i = 0; i < c; ++i) { k = b[i]; print a[k] " " k;} }\' | awk \'{print $4}\'',stdout=subprocess.PIPE,shell=True).communicate()[0].decode().strip().split('\n')
+natom = subprocess.Popen('grep "ions per type" ' + outcar,stdout=subprocess.PIPE,shell=True).communicate()[0].decode().strip().split()
+nelect = subprocess.Popen(' grep "NELECT"  ' + outcar + '  | awk \'{print $3}\' ',stdout=subprocess.PIPE,shell=True).communicate()[0].decode().strip()
+
+if species[0][0:2] == 'Ge':
+    nge = natom[4]
+    if len(species[0]) > 2:
+        potge = 14
+    else:
+        potge = 4
+    if len(natom) == 6:
+        nga = natom[5]
+        if len(species[1]) > 2:
+            potga = 13
+        else:
+            potga = 3
+    else:
+        nga = 0
+        potga = 0
+else:
+    nga = natom[4]
+    if len(species[0]) > 2:
+        potga = 13
+    else:
+        potga = 3
+    if len(natom) == 6:
+        nge = natom[5]
+        if len(species[1]) > 2:
+            potge = 14
+        else:
+            potge = 4
+    else:
+        nge = 0
+        potge = 0
+eps=16.2
+if float(sys.argv[2]) > 0:
+    eps = float(sys.argv[2])
+charge =  int(nga)*int(potga) + int(nge)*int(potge) - int(float(nelect))
+charge = -charge
+run1 = subprocess.Popen('sxdefectalign --vasp --ecut ' + str(ecut) + ' --charge ' + str(charge) + ' --eps ' + str(eps) + ' --center 0,0,0 --relative --vdef LOCPOT --vref ' + str(refpot) + ' | grep mesh',shell=True,stdout=subprocess.PIPE).communicate()[0]
+ngx = run1.decode().split()[2]
+import pandas as pd
+from pandas.compat import StringIO
+temp = subprocess.Popen('head -n ' + str(ngx) + ' vline-eV-a0.dat',shell=True,stdout=subprocess.PIPE).communicate()[0].decode('utf-8')
+df = pd.read_table(StringIO(temp),header = None)
+if charge > 0:
+    C = df[1].min()
+else:
+    C = df[1].max()
+
+run2 = subprocess.Popen('sxdefectalign --vasp --ecut ' + str(ecut) + ' --charge ' + str(charge) + ' --eps ' + str(eps) + ' --center 0,0,0 --relative --vdef LOCPOT --vref ' + str(refpot) + '  -C ' + str(C) + ' | grep \'Defect correction\' | awk \'{print $4}\' ',shell=True,stdout=subprocess.PIPE).communicate()[0]
+
+print('sxdefectalign --vasp --ecut ' + str(ecut) + ' --charge ' + str(charge) + ' --eps ' + str(eps) + ' --center 0,0,0 --relative --vdef LOCPOT --vref ' + str(refpot) + '  -C ' + str(C) + ' | grep \'Defect correction\' | awk \'{print $4}\' ')
+
+print(run2.decode().strip())
+

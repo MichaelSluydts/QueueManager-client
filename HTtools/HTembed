@@ -1,0 +1,55 @@
+#!/usr/bin/env python
+import sys,subprocess
+
+small = subprocess.Popen('cat ' + sys.argv[1] + ' | aconvasp --shift 0.5 0.5 0.5 d | aconvasp --cart',shell=True,stdout=subprocess.PIPE).communicate()[0].decode()
+large = subprocess.Popen('cat ' + sys.argv[2] + ' | aconvasp --shift 0.5 0.5 0.5 d | aconvasp --cart',shell=True,stdout=subprocess.PIPE).communicate()[0].decode()
+def parse(poscar):
+    coords = []
+    lines = poscar.split('\n')
+    a = lines[1].strip().split(' ')[0]
+    i = 0
+    marker = 9999999
+    natoms = 9999999
+    for line in lines:
+        if i > 0 and  line.strip() == 'Ge':
+            marker = i
+        if i == marker + 1:
+            natoms = sum([int(x) for x in line.split()])
+        if i > marker + 2:
+            temp = line.split()[0:3]
+            coords.append(temp)
+        i+=1
+        if len(coords) == natoms:
+            break
+    return a, coords, poscar, marker,natoms
+asmall, csmall,poscarsmall,markersmall,natomssmall = parse(small)
+alarge,clarge, poscarlarge,markerlarge,natomslarge = parse(large)
+
+ds = []
+dl = []
+for c in csmall:
+    ds.append(sum([(float(x)-float(asmall)/2)**2 for x in c]))
+
+for c in clarge:
+    dl.append(sum([(float(x)-float(asmall)/2)**2 for x in c]))
+
+csmalls = [c for (d,c) in sorted(zip(ds,csmall))]
+clarges = [c for (d,c) in sorted(zip(dl,clarge))]
+
+diff =  int(sys.argv[3]) 
+while diff > 0:
+    clarges.insert(0, [0.,0.,0.])
+    diff -= 1
+while diff < 0:
+    clarges.pop(0)
+    diff += 1
+
+diff =  int(sys.argv[3])
+#possible overlap same distance depending on sort
+ind = 32+diff
+clarges[0:ind] = csmalls[0:ind]
+lines = poscarlarge.split('\n')
+clines = [' '.join(c) for c in clarges]
+lines[(markerlarge+3):(markerlarge+4+natomslarge)] = clines
+lines[6] = str(int(natomslarge) + int(diff))
+print('\n'.join(lines))

@@ -1,0 +1,4 @@
+/user/data/gent/gvo000/gvo00003/shared/anaconda3/envs/breniac/lib/python3.6/site-packages/h5py/__init__.py:36: FutureWarning: Conversion of the second argument of issubdtype from `float` to `np.floating` is deprecated. In future, it will be treated as `np.float64 == np.dtype(float).type`.
+  from ._conv import register_converters as _register_converters
+/user/data/gent/gvo000/gvo00003/shared/anaconda3/envs/breniac/lib/python3.6/site-packages/sklearn/gaussian_process/gpr.py:457: UserWarning: fmin_l_bfgs_b terminated abnormally with the  state: {'grad': array([-1.11614946e-05, -1.36838389e-05,  4.46885448e-02]), 'task': b'ABNORMAL_TERMINATION_IN_LNSRCH', 'funcalls': 88, 'nit': 34, 'warnflag': 2}
+  " state: %s" % convergence_dict)

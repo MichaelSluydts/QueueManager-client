@@ -1,0 +1,15 @@
+#!/usr/bin/env python
+from HighThroughput.communication.mysql import mysql_query
+import sys
+
+if int(sys.argv[1]) > 0:
+    overview = mysql_query('SELECT `stat`, COUNT(`stat`) AS `count` FROM `calculations` WHERE queue = ' + sys.argv[1] + ' GROUP BY `stat`')
+    print('Stat\t# jobs')
+    print(overview)
+    if(type(overview) == list):
+        for o in overview:
+            print(o['stat'] + '\t' + o['count'])
+    else:
+        print(overview['stat'] + '\t' + overview['count'])
+else:
+    print('Please enter a proper Queue ID.')

@@ -1,0 +1,24 @@
+#!/usr/bin/env python
+from pymatgen.matproj.rest import MPRester
+from pymatgen import Composition
+from pymatgen.entries.computed_entries import ComputedEntry
+from pymatgen.core.units import FloatWithUnit
+from pymatgen.analysis.reaction_calculator import ComputedReaction
+from pymatgen.apps.borg.hive import VaspToComputedEntryDrone
+from pymatgen.apps.borg.queen import BorgQueen
+from pymatgen.phasediagram.maker import PhaseDiagram
+from pymatgen.phasediagram.plotter import PDPlotter
+from pymatgen.phasediagram.analyzer import *
+import re,os, sys
+drone = VaspToComputedEntryDrone()
+queen = BorgQueen(drone)
+queen.load_data(sys.argv[1])
+entriesorig = queen.get_data()
+i=0
+for entry in entriesorig:
+    name = entry.name
+    name = re.findall('[A-Z][^A-Z]*',name.replace('(','').replace(')',''))
+    name = ' '.join(name)
+    name = ''.join(i for i in name if not i.isdigit())
+    os.system('echo \'' + name  + '\' >> entries' + str(int(i/20)))
+    i+=1

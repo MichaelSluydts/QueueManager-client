@@ -1,0 +1,18 @@
+#!/usr/bin/env python 
+import os ,subprocess
+
+maindir = os.curdir
+
+for i in os.listdir(maindir):
+    if i[0:3] == '100':
+        for j in ['0.94','0.96','0.98','1.0','1.02','1.04','1.06']:
+            test = subprocess.Popen('cat ' + os.path.join(maindir,i,'STEP3',j,'tempout') + '| fgrep "reached required accuracy - stopping structural energy minimisation" | wc -l',shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE).communicate()[0].strip()
+            #energies = subprocess.Popen('grep \'gy  w\' ' + os.path.join(maindir,i,'STEP3',j,'OUTCAR') + ' | awk \'{print $4}\'',shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE).communicate()[0].split()
+            energies = subprocess.Popen('grep \'F=\' ' + os.path.join(maindir,i,'STEP3',j,'tempout') + ' | awk \'{print $3}\'',shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE).communicate()[0].split()
+            energies = [float(x) for x in energies]
+            if len(energies) == 7:
+                diff = energies[-1] - min(energies)
+                if (diff < -0.001):
+                    print(i + '/STEP3/' + j + ' relax issue min:' + str(min(energies)) + ' final:' + str(energies[-1]) + ' diff:' + str(min(energies)-energies[-1]))
+            if test == '0':
+                print(i + '/STEP3/' + j)

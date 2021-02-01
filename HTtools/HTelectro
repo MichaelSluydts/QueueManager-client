@@ -1,0 +1,90 @@
+#!/usr/bin/env python
+import warnings
+warnings.filterwarnings("ignore")
+from pymatgen.ext.matproj import MPRester
+from pymatgen import Composition
+from pymatgen.entries.computed_entries import ComputedEntry
+from pymatgen.core.units import FloatWithUnit
+from pymatgen.analysis.reaction_calculator import ComputedReaction
+from pymatgen.apps.borg.hive import VaspToComputedEntryDrone
+from pymatgen.apps.borg.queen import BorgQueen
+from pymatgen.analysis.phase_diagram import *
+from pymatgen.entries.compatibility import MaterialsProjectCompatibility
+import re, sys, json, os
+drone = VaspToComputedEntryDrone()
+queen = BorgQueen(drone, sys.argv[1], 4)
+entriesorig = queen.get_data()
+queen.load_data(os.path.join(os.path.dirname(__file__), '../ML/data/missingels.json'))
+entriesextra = queen.get_data() 
+
+if len(sys.argv) > 2:
+    compat = MaterialsProjectCompatibility(check_potcar=False)
+    entriesorig = compat.process_entries(entriesorig) 
+
+for entry in entriesorig:
+    name = entry.name
+    line = re.findall('[A-Z][^A-Z]*',name.replace('(','').replace(')',''))
+
+searchset= set(re.sub('\d',' ',' '.join(line)).split())
+entries = filter(lambda e: set(re.sub('\d',' ',str(e.composition).replace(' ','')).split())==searchset, entriesorig)
+
+entriesextra =  filter(lambda e: set(re.sub('\d',' ',str(e.composition).replace(' ','')).split()) & searchset, entriesextra)
+#This initializes the REST adaptor. Put your own API key in.
+a = MPRester("s2vUo6mzETOHLdbu")
+#unknownEls = set(['Po','Ra'])
+
+#if unknownEls & searchset:
+#    print('99', None)
+#    exit()
+
+#print(a.get_stability(entriesorig))
+all_entries = a.get_entries_in_chemsys(set(searchset)) + list(entries) + list(entriesextra)
+
+pd = PhaseDiagram(all_entries)
+
+def name(potcar):
+    name = ''
+    for p in potcar:
+        temp = (p.split(' ')[-2].split('_')[0])
+        name += temp
+    return name
+    
+#for e in pd.stable_entries:
+#    if e.entry_id == None:
+#        reaction = pd.get_equilibrium_reaction_energy(e)
+#        print(reaction,None)
+
+#for e in pd.unstable_entries:
+#    decomp, e_above_hull = pd.get_decomp_and_e_above_hull(e)
+#    pretty_decomp = [("{}:{}".format(k.composition.reduced_formula, k.entry_id), round(v, 2)) for k, v in decomp.items()]
+#    if e.entry_id == None:
+#        print(e_above_hull,pretty_decomp)
+
+li_entries = [e for e in all_entries if e.composition.reduced_formula == "Li"]
+uli0 = min(li_entries, key=lambda e: e.energy_per_atom).energy_per_atom
+
+for entry in entriesorig:
+    name = entry.name
+
+    line = re.findall('[A-Z][^A-Z]*',name.replace('(','').replace(')',''))
+
+    searchset= set(re.sub('\d',' ',' '.join(line)).split())
+    #why am I refiltering
+    temp = filter(lambda e: set(re.sub('\d',' ',str(e.composition).replace(' ','')).split())==searchset, entries)
+
+    all_entries = a.get_entries_in_chemsys(set(searchset)) + list(temp)
+
+    #They place LGPS on the ehull, can you do that here?
+    pd = PhaseDiagram(all_entries)
+
+    el_profile = pd.get_element_profile(Element('Li'), entry.composition)
+
+    for j, d in enumerate(el_profile):
+        if np.isclose([x for x in list(zip(d['reaction']._all_comp,d['reaction']._coeffs)) if x[0] == Composition('Li')][-1][-1], 0):
+            ind = j
+            break
+            
+#out = {'electro' : (-np.round(el_profile[j]['chempot']- uli0,3),-np.round(el_profile[j+1]['chempot']- uli0,3))}
+
+out = (-np.round(el_profile[j]['chempot']- uli0,3),-np.round(el_profile[j+1]['chempot']- uli0,3))
+print(json.dumps(out))

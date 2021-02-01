@@ -1,0 +1,43 @@
+#!/usr/bin/env python
+import os, shutil, sys , time
+
+vols = [str(float(vol)/100) for vol in range(94,108,2)]
+
+edir = sys.argv[2]
+
+f = open(os.path.join(edir,'STEP4/EOS_data'),'r')
+enmin = 999999999.999999999
+i=0
+for line in f.readlines():
+    en = float(line.split()[1])
+    
+    if en < enmin:
+        enmin = en
+        volmin = vols[i]
+    i += 1
+
+shutil.copy2(os.path.join(edir,'STEP3',volmin,'CONTCAR'),os.path.join('../import',edir + '.vasp'))
+if os.path.isfile(os.path.join(edir,'STEP3',volmin,'CHGCAR')):
+    shutil.copy2(os.path.join(edir,'STEP3',volmin,'CHGCAR'),os.path.join('../import','CHGCAR' + edir))
+
+dirlist = ['STEP3/' + vol for vol in vols if vol != volmin]
+dirlist.extend(['BANDS','DOS','STEP4'])
+
+for dirs in dirlist:
+    if os.path.isfile(os.path.join(edir,dirs,'CHGCAR')):
+        os.remove(os.path.join(edir,dirs,'CHGCAR'))
+    if os.path.isfile(os.path.join(edir,dirs,'CHG')):
+        os.remove(os.path.join(edir,dirs,'CHG'))
+    if os.path.isfile(os.path.join(edir,dirs,'WAVECAR')):
+        os.remove(os.path.join(edir,dirs,'WAVECAR'))
+
+
+if not os.path.isdir(os.path.join(edir,'old' + str(time.time()))):
+    os.mkdir(os.path.join(edir,'old' + str(time.time())))
+
+dirlist = ['BANDS','DOS','STEP4','STEP3']
+for dirs in dirlist:
+    if os.path.isdir(os.path.join(edir,dirs)):
+        shutil.move(os.path.join(edir,dirs),os.path.join(edir,'old' + str(time.time())))
+
+os.system('HTrollback ' + sys.argv[1] + ' ' + edir + ' 0')

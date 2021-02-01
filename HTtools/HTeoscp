@@ -1,0 +1,20 @@
+#!/usr/bin/env python
+import sys,os
+import shutil
+
+eosf = sys.argv[1]
+eost = sys.argv[2]
+
+shutil.copytree(eosf, eost + 'f' + eosf)
+
+os.chdir(eost + 'f' + eosf)
+os.system('cont')
+
+old = open(os.path.join('../',eost,'CONTCAR'),'r')
+coords = old.readlines()[1:5]
+new = open('POSCAR','r+')
+newcoords = new.readlines()
+newcoords[1:5] = coords
+new.seek(0)
+new.write(''.join(newcoords))
+new.close()

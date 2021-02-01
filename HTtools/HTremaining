@@ -1,0 +1,10 @@
+#!/usr/bin/env python
+import HighThroughput as HT
+import os,subprocess,sys
+from HighThroughput.communication.mysql import *
+
+wf = mysql_query('SELECT MAX(`stat`) as m FROM `workflows` WHERE `id` = (SELECT `workflow` FROM `queues` WHERE `id` = ' + sys.argv[1]  + ')')
+maxstat = wf['m']
+
+running = mysql_query('SELECT COUNT(`file`) AS `count` FROM `calculations` WHERE `queue` = ' + sys.argv[1] + ' AND `stat`< ' + maxstat + ' AND `stat` % 2 = 0 AND `leaf` = 1')
+print(running['count'])

@@ -1,0 +1,22 @@
+#!/usr/bin/env python
+import HighThroughput as HT
+import sys
+from HighThroughput.communication.mysql import *
+
+queue = HT.manage.queue.get(sys.argv[1])
+workflow = HT.manage.workflow.get(queue['workflow'])
+dupelist = []
+for wf in workflow:
+    dupes = mysql_query('SELECT `file` FROM `calculations` WHERE `queue` = ' + queue['id'] + ' AND `stat` = ' + wf['stat'] + ' GROUP BY `file` HAVING COUNT(`file`) > 1')
+    
+    if not isinstance(dupes, str):
+        if isinstance(dupes, list):
+            for dupe in dupes:
+                if dupe['file'] not in dupelist:
+                    dupelist.append(dupe['file'])
+        else:
+            if dupes['file'] not in dupelist:
+                dupelist.append(dupes['file'])
+
+print('\n'.join(dupelist))
+    

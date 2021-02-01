@@ -1,0 +1,40 @@
+#!/usr/bin/env python
+import re,sys,subprocess
+from HighThroughput.communication.mysql import *
+efile = sys.argv[1]
+mats = open(efile,'r')
+sql = open(efile + '.sql','w')
+from random import randint
+from time import sleep
+
+for line in mats:
+    counter = 0
+    i=0
+    while counter == 0:
+        phase = subprocess.Popen('HTphase ' + sys.argv[2] + ' \'' + line.strip() + '\' | grep None',stdout=subprocess.PIPE,shell=True).communicate()[0]
+        results = filter(None,phase.split('\n'))
+        counter = len(results)
+        if i > 0:
+            sleep(randint(3,30))
+        i+=1
+    for line in results:
+        cols = line.split(' ', 4)
+        #formlist = [a for a in re.split(r'([A-Z][a-z]*\d*)', cols[0]) if a]
+        #for i in range(0,len(formlist)):
+        #    if re.search("4",formlist[i]) and i != 3:
+        #        formlist.append(formlist.pop(i))
+        #text = ''.join(formlist)
+        #formlist.insert(1,formlist.pop(2))
+        #text2 = ''.join(formlist)
+        text = cols[0]
+        ehull = cols[3]
+        if len(cols) == 5:
+            path = cols[4]
+        else:
+            path = ''
+        sql.write('UPDATE `zintlfinal` SET `ehull` = ' + str(ehull) + ', `path` = "' + path + '" WHERE `file` IN (SELECT `file` FROM `map` WHERE `text` = \'' + text + '\');\n')
+sql.close()
+
+
+
+

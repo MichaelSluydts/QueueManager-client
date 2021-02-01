@@ -1,0 +1,25 @@
+#!/usr/bin/env python
+
+import os,sys
+from HighThroughput.communication.mysql import mysql_query
+
+def clean(fname,qdir):
+    cdir = [os.path.join(qdir,'CALCULATIONS',fname,x) for x in ['CALIB/low','RELAX/vol','RELAX/all','EOSL/1.0','EOSL/1.02','EOSL/0.98','EOSL/1.04','EOSL/0.96','EOSL/1.06','EOSL/0.94','RELAX/internalL','CALIB/high','EOSH/1.0','EOSH/1.02','EOSH/0.98','EOSH/1.04','EOSH/0.96','EOSH/1.06','EOSH/0.94','RELAX/internalH']]
+    for c in cdir:
+        kill =  ['CHGCAR','CHGCAR.gz','WAVECAR','WAVECAR.gz','CHG','LOCPOT']
+        for k in kill:
+            kfile=os.path.join(c,k)
+            if os.path.isfile(kfile):
+                os.remove(kfile)
+
+qid = sys.argv[1]
+
+user = os.getenv('USER')
+scratch = os.getenv('VSC_SCRATCH_VO')
+qdir = os.path.join(scratch, 'queues', str(qid))
+
+
+done = mysql_query('SELECT `file` FROM `calculations` WHERE `queue` = ' + sys.argv[1] + ' and `stat` = 42')
+
+for row in done:
+    clean(row['file'],qdir)

@@ -1,0 +1,15 @@
+#!/usr/bin/env python
+import os,shutil
+
+if not os.path.isdir('vasprun'):
+    os.mkdir('vasprun')
+
+for dirs in os.listdir(os.curdir):
+    if dirs[0] == '1':
+        if not os.path.isdir(os.path.join('vasprun',dirs)):
+            os.mkdir(os.path.join('vasprun',dirs))
+        shutil.copy2(os.path.join(dirs,'STEP4/vasprun.xml'),os.path.join('vasprun',dirs))
+        shutil.copy2(os.path.join(dirs,'STEP4/POSCAR'),os.path.join('vasprun',dirs))
+        shutil.copy2(os.path.join(dirs,'STEP4/CONTCAR'),os.path.join('vasprun',dirs))
+        shutil.copy2(os.path.join(dirs,'STEP4/POTCAR'),os.path.join('vasprun',dirs))
+

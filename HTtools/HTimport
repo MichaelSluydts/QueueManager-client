@@ -1,0 +1,4 @@
+#!/usr/bin/env python
+
+import HighThroughput
+HighThroughput.manage.material.importdir()

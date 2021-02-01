@@ -1,0 +1,115 @@
+#!/usr/bin/env python
+import shutil, os, sys, re
+import subprocess
+from subprocess import Popen, PIPE
+from sys import argv
+
+import ase.io
+
+import HighThroughput.manage.calculation as HT
+import HighThroughput.io
+from HighThroughput.utils.generic import execute
+from HighThroughput.communication.mysql import mysql_query 
+import json
+import time
+import random
+
+from numpy.linalg import norm
+from numpy import dot, arccos, degrees, floor, prod
+
+#UPDATE POTCAR INFO
+
+folder = os.getcwd().split('/')[-1]
+statmap = {'0.94' : 2,'0.96' : 4,'0.98' : 6, '1.0' : 8, '1.02' : 10,'1.04' : 12,'1.06' : 14,'STEP4' : 16, 'DOS' : 18, 'BANDS' : 20}
+
+stat = statmap[folder]
+
+cid = mysql_query('SELECT `id` FROM `calculations` WHERE `queue` = ' + str(sys.argv[1]) + ' AND `file` = ' + str(sys.argv[2]) + ' AND `stat` IN (' + str(stat) + ', '  + str(stat - 1) + ')')
+cid = cid['id']
+settings = {'INCAR': HighThroughput.io.VASP.readINCAR(), 'KPOINTS' : HighThroughput.io.VASP.readKPOINTS()}
+POTCAR_version = execute('grep -a \'TITEL\' POTCAR | awk \'{ print $4 }\'')
+settings['POTCAR'] = POTCAR_version.strip().replace('\n',', ')
+
+#END CALCULATION AND FETCH RESULTS
+
+energy = execute('grep \'energy  without entropy\'  OUTCAR | tail -1 | awk \'{ print $7 }\'')
+
+if 'error' in locals():
+    HT.updateResults({'error':error}, cid)
+elif energy=='' or not 'energy' in locals():
+    HT.updateResults({'error':'Energy missing'}, cid)
+    print('Energy missing! Error...')
+elif not os.path.isfile('CHGCAR') and not os.path.isfile('CHG'):
+    #HT.updateResults({'error':'CHGCAR and CHG missing. VASP Error?'}, cid)
+    print('CHGCAR/CHG missing. VASP Error?')
+else:
+    print('Energy OK. Ending calculation, deleting junk files and fetching results.')
+    print('This is the HT.end cid: ' + str(cid))
+
+    ended = 0
+    tries = 0
+    while(ended == 0 and tries < 10):
+        #ended = HT.end(cid)
+        ended = 1
+        tries = tries + 1
+        #time.sleep(random.randint(10,100))
+    if(ended == 0):
+        print('ERROR: I tried to end calculation ' + str(cid) + str(tries) + ' times, but no succes.') #tries should always be 10
+        #HT.updateResults({'error':'Ending calculation failed'}, cid)
+
+    else:
+        #if status<15:
+            #os.remove('CHGCAR')
+            #os.remove('CHG')
+        results = HT.getResults(cid)
+
+        #could leave this out when working with QZP's
+
+        poscar = open('POSCAR','r')
+        lines = poscar.readlines()
+
+        numberofatoms = lines[6][:-1].lstrip()
+        numberofatoms = " ".join(numberofatoms.split())
+        numberofatoms = sum(map(int, numberofatoms.split(' ')))
+
+        energy = float(energy)
+
+        Eatom = energy/numberofatoms 
+        results['Eatom'] = Eatom
+
+        atoms = lines[5].split()
+
+        energies = {'Te':-3.142188083,'K':-1.04693431,'Tl':-2.2266554,'Se':-3.498123137,'Rb':-0.936014755,'Sb':-4.13566371,'P':-5.373717185,'Bi':-3.885356122,'Po':-3.07473254,'Al':-3.745478105,'Ca':-1.929739603,'In':-2.55987617,'Sn':-3.846317905,'Ga':-2.905926696,'Mg':-1.506391565,'Na':-1.311801313,'Ba':-1.90827009,'Sr':-1.636048335,'Cs':-0.852268485,'S':-4.125889916,'Si':-5.424861565,'Ge':-4.51831862,'Pb':-3.565225973,'As':-4.66985772,'Li':-1.910459733}
+
+
+        if len(atoms)==1:
+            results['Eformation'] = Eatom  - float(energies[str(atoms[0])])
+        elif len(atoms)==4:    
+            results['Eformation'] = Eatom  - float(6*energies[str(atoms[0])] + energies[str(atoms[1])] + 4*energies[str(atoms[2])] + 3*energies[str(atoms[3])])/14
+
+        results['volume'] = float(Popen('grep volume OUTCAR | tail -1 | awk \'{print $5}\' ', stdout=PIPE, shell=True).communicate()[0])
+
+        crystal = ase.io.read('CONTCAR')
+        cell = crystal.get_cell()
+    
+        a = cell[0];
+        b = cell[1];
+        c = cell[2];
+        na = round(norm(a),3);
+        nb = round(norm(b),3);
+        nc = round(norm(c),3);    
+
+        results['a'] = na
+        results['b'] = nb
+        results['c'] = nc
+        results['alpha'] = round(degrees(arccos(dot(b,c)/nb/nc)),1)
+        results['beta'] = round(degrees(arccos(dot(c,a)/nc/na)),1)
+        results['gamma'] = round(degrees(arccos(dot(a,b)/na/nb)),1)
+    
+        print('Updating results')
+        print(results)
+        HT.updateResults(results, cid)
+
+print('Updating settings')
+print(settings)
+HT.updateSettings(settings, cid)

@@ -1,0 +1,29 @@
+#!/usr/bin/env python
+from pymatgen.ext.matproj import MPRester
+from pymatgen import Composition
+from pymatgen.entries.computed_entries import ComputedEntry
+from pymatgen.core.units import FloatWithUnit
+from pymatgen.analysis.reaction_calculator import ComputedReaction
+from pymatgen.apps.borg.hive import VaspToComputedEntryDrone
+from pymatgen.apps.borg.queen import BorgQueen
+from pymatgen.analysis.phase_diagram import *
+import re,sys
+drone = VaspToComputedEntryDrone()
+queen = BorgQueen(drone)
+queen.load_data(sys.argv[1])
+entriesorig = queen.get_data()
+sql = open('allenergies.sql','w')
+
+def name(potcar):
+    name = ''
+    for p in potcar:
+        temp = (p.split(' ')[-2].split('_')[0])
+        name += temp
+    return name
+
+for entry in entriesorig:
+    text = name(entry.parameters['potcar_symbols'])
+    ehull = entry.uncorrected_energy
+    sql.write('UPDATE `zintlfinal` SET `E0` = ' + str(ehull) + ' WHERE `file` IN (SELECT `file` FROM `map` WHERE `text` = \'' + text + '\');\n')
+sql.close()
+

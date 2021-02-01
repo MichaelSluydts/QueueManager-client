@@ -1,0 +1,130 @@
+#!/usr/bin/env python
+import os, random, re, shutil, subprocess, sys, time,math
+import HighThroughput.manage.calculation as HT
+import HighThroughput.manage.template as template
+import HighThroughput.manage.material as material
+from HighThroughput.io.VASP import *
+from HighThroughput.utils.generic import *
+from HighThroughput.modules.VASP import *
+from HighThroughput.errors.generic import *
+from HighThroughput.communication.mysql import *
+
+import argparse
+
+parser = argparse.ArgumentParser(description='VASP wrapper')
+parser.add_argument('-q','--queue', metavar='qid', type=int,
+                           help='The queue you wish to submit the calculation to, a default type queue or one optimized for the specific type of calculation.')
+
+args = parser.parse_args()
+
+INCAR = readINCAR()
+
+if 'CALCID' in INCAR.keys():
+    sid = INCAR['CALCID']
+else:
+    os.mkdir('import')
+    os.chdir('import')
+    shutil.copy('../POSCAR','POSCAR' + INCAR['SYSTEM'])
+#Could have a mat argument for COD entries
+    matid = material.add('POSCAR' + INCAR['SYSTEM'])
+    sid = HT.add(matid,args.queue)
+    HT.modify({'id' : cid, 'file' : matid})
+    os.chdir('../')
+print sid
+HT.start(sid)
+print sid
+cid = HT.calcid
+print cid
+calc = HT.get(cid)
+print calc
+calc['settings'] = readSettings(calc['settings'])
+calc['settings']['continue'] = 1
+calc['settings']['INCAR']['CALCID'] = sid
+writeSettings(calc['settings'])
+HT.updateSettings(calc['settings'],cid)
+
+
+cfile = calc['file']
+status = int(calc['stat'])
+
+print('Server: ' + calc['server'])
+
+if os.path.isfile('aborted'):
+    os.remove('aborted')
+
+checkpointStart(calc)
+
+parent = HT.getSettings(calc['parent'])
+
+if 'continue' not in parent.keys():
+    parent['continue'] = 0
+if 'continued' not in parent.keys():
+    parent['continued'] = 0
+
+if int(parent['continue']) > int(parent['continued']):
+    print 'Continuing job'
+    cont(calc)
+
+#Can reenable if you want
+#if detectSP('POSCAR'):
+#    calc['settings']['INCAR']['ISPIN'] = 2
+
+parallelSetup(calc['settings'])
+perror = HT.getResults(calc['parent'])
+if perror.get('errors') != None:
+    fixerrors(calc)
+writeSettings(calc['settings'])
+run()
+finderrors(calc)
+if os.path.isfile('STOPCAR'):
+    os.remove('STOPCAR')
+
+
+
+print('END STATUS ' + calc['stat'])
+
+
+#UPDATE POTCAR INFO
+
+POTCAR_version = execute('grep -a \'TITEL\' POTCAR | awk \'{ print $4 }\'')
+calc['settings']['POTCAR'] = POTCAR_version.strip().replace('\n',', ')
+
+if os.path.isfile('aborted'):
+    print 'Calculation aborted'
+    #execute('HTvasp ' + str(qid) + ' ' + str(submit_arg))
+    sys.exit()
+#END CALCULATION AND FETCH RESULTS
+
+energy = execute('grep \'energy  without entropy\'  OUTCAR | tail -1 | awk \'{ print $4 }\'')
+
+if 'error' in locals():
+    HT.updateResults({'error':error}, cid)
+elif energy=='' or not 'energy' in locals():
+    HT.updateResults({'error':'Energy missing'}, cid)
+    print('Energy missing! Error...')
+elif not os.path.isfile('CHGCAR') and not os.path.isfile('CHG'):
+    HT.updateResults({'error':'CHGCAR and CHG missing. VASP Error?'}, cid)
+    print('CHGCAR/CHG missing. VASP Error?')
+else:
+    print('Energy OK. Ending calculation, deleting junk files and fetching results.')
+    HT.end(cid)
+        #cleanup function
+    os.remove('CHG')
+    
+    print calc['results']
+    results = calc['results']
+    #could leave this out when working with QZP's
+
+    energy = float(energy)
+
+    results['E0'] = energy
+
+    print('Updating results')
+# updateresults could be assumed from dictionary keys and automated.
+    HT.updateResults(results, cid)
+
+print('Updating settings')
+HT.updateSettings(calc['settings'], cid)
+
+#if int(HT.fetch(str(qid))) > 0:
+#    execute('betaHSE ' + str(qid) + ' ' + str(submit_arg))

@@ -1,0 +1,61 @@
+#!/usr/bin/env python
+#output to file, view with more
+import os,subprocess
+
+def checkeos(eospath):
+    #check r2
+    r = subprocess.Popen('cat ' + eospath + '.eosout | grep 1-R | awk \'{print $2}\'', stdout = subprocess.PIPE, shell = True).communicate()[0].strip()
+    B = subprocess.Popen('cat ' + eospath + '.eosout | grep GPa | awk \'{print $2}\'', stdout = subprocess.PIPE, shell = True).communicate()[0].strip()
+    BP = subprocess.Popen('cat ' + eospath + '.eosout | grep BP | awk \'{print $2}\'', stdout = subprocess.PIPE, shell = True).communicate()[0].strip()
+    V0 = subprocess.Popen('cat ' + eospath + '.eosout | grep V0 | awk \'{print $2}\'', stdout = subprocess.PIPE, shell = True).communicate()[0].strip()
+    E0 = subprocess.Popen('cat ' + eospath + '.eosout | grep E0 | awk \'{print $2}\'', stdout = subprocess.PIPE, shell = True).communicate()[0].strip()
+    Vmin = subprocess.Popen('head -n 1 ' + eospath + ' | awk \'{print $1}\'', stdout = subprocess.PIPE, shell = True).communicate()[0].strip()
+    Vmax = subprocess.Popen('tail -n 1 ' + eospath + ' | awk \'{print $1}\'', stdout = subprocess.PIPE, shell = True).communicate()[0].strip()
+    color = ['\033[1m\033[32m','\033[1m\033[33m','\033[1m\033[91m']
+    psplit = eospath.split('/')
+
+    output = '\033[0m' + psplit[-3] + ': '
+    
+    if float(r) < 0.0005:
+        i = 0
+    elif float(r) > 0.003:
+        i = 2
+    else:
+        i = 1
+
+    output += ' \t\033[0m1-R^2: ' + color[i] + r
+
+    if float(B) < 10 or float(B) > 400:
+        j = 2
+    else:
+        j = 0
+
+    output +=  ' \t\033[0m B:' + color[j] + B
+
+    if float(BP) < 3 or float(BP) > 5:
+        k = 2
+    else:
+        k = 0
+
+    output +=  ' \t\033[0m BP:' + color[k] + BP
+
+    if float(V0) < float(Vmin) or float(V0) > float(Vmax):
+        l = 2
+    elif (float(V0) - float(Vmin))/(float(Vmax) - float(Vmin)) < 0.05 or (float(Vmax) - float(V0))/(float(Vmax) - float(Vmin)) < 0.05:
+        l = 1
+    else:
+        l = 0
+
+    output += color[l] + ' \t\033[0mV: ' + color[l] + Vmin + '<' + V0 + '<' + Vmax
+    
+    if i != 0 or j !=0 or k !=0 or l != 0:
+        output += ' \033[1m(X)'
+
+    print(output)
+
+rootdir = os.curdir
+for dirs in os.listdir(rootdir):
+    if dirs[0] == '1':
+        eospath = os.path.join(rootdir,dirs,'STEP4/EOS_data')
+        checkeos(eospath)
+

@@ -1,0 +1,42 @@
+#!/usr/bin/env python
+
+import os,sys, shutil, subprocess
+
+cifid = sys.argv[1]
+
+shutil.copy(cifid + '.cif','temp/temp.cif')
+
+
+
+os.chdir('temp')
+with open('temp.cif','r') as cif:
+    lines = cif.readlines()
+    temp = lines[8].split(' ',1)
+    if '90' in lines[4] and '90' in lines[5] and '120' in lines[6]:
+        temp[1] = 'H'
+   #    lines[8] = temp[0] + ' \'' + temp[1].strip() + '\'\n'
+
+with open('temp.cif','w') as cif:
+    cif.write(''.join(lines))
+
+subprocess.Popen('cif2struct temp.cif',stdout=subprocess.PIPE,stderr=subprocess.PIPE,shell=True).wait()
+symm = subprocess.Popen('x symmetry',stdout=subprocess.PIPE,stderr=subprocess.PIPE,shell=True)
+out = symm.communicate()[0]
+if 'hexagonal' in out:
+     with open('temp.struct','r') as struct:
+         lines = struct.readlines()
+         lines[1] = 'H' + lines[1][1:]
+     with open('temp.struct','w') as struct:
+         struct.write(''.join(lines))
+     subprocess.Popen('x symmetry',stdout=subprocess.PIPE,stderr=subprocess.PIPE,shell=True).wait()
+elif 'STOP' in out:
+    print(cifid,out)
+shutil.copy('temp.struct_st','temp.struct')
+subprocess.Popen('x sgroup',stdout=subprocess.PIPE,stderr=subprocess.PIPE,shell=True).wait()
+shutil.copy('temp.struct_sgroup','temp.struct')
+nsymm = subprocess.Popen('cat temp.struct | grep \'MBER OF SYMMETRY OPERATION\' | awk \'{print $1}\'',stdout=subprocess.PIPE,shell=True).communicate()[0].strip()
+natoms = subprocess.Popen('cat temp.struct | grep \'LOCAL ROT MATRIX\' | wc -l',stdout=subprocess.PIPE,shell=True).communicate()[0].strip()
+
+print(cifid + '\t' + natoms + '\t' + nsymm)
+os.system('rm temp*')
+os.chdir('../')

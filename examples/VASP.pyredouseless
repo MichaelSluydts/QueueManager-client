@@ -1,0 +1,351 @@
+#!/usr/bin/env python
+
+import sys
+print(sys.version)
+import shutil, os, sys, re
+import subprocess
+from subprocess import Popen, PIPE
+from sys import argv
+
+import ase.io
+
+import HighThroughput.manage.calculation as HT
+import HighThroughput.manage.template as template
+import HighThroughput.io
+
+import json
+import time
+import random
+
+from numpy.linalg import norm
+from numpy import dot, arccos, degrees, ceil
+sleep = random.randrange(20)
+print('Random sleep... ZzZzZz for '+str(sleep)+' seconds, before starting script.')
+time.sleep(sleep)
+
+
+qid = argv[1]
+submit_arg = '' + argv[2] + ' ' + argv[3] + ' ' + argv[4]
+
+qdir = os.getenv('VSC_SCRATCH') + '/queues/'+str(qid)
+
+
+def execute(command):
+    out, err = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate()
+    print out
+    print >> sys.stderr, err
+    
+    if err in locals():
+        #raise Exception('Error in executing bash-command.')
+        return False
+    else:
+        return out
+
+def mkdir(command):
+    if not os.path.isdir(command):
+        os.mkdir(command)
+
+def remove(command):
+    if os.path.isfile(command):
+        os.remove(command)
+    else:
+        print(str(command)+' is not a file.')
+
+def error_catch(command):
+    try:
+        execute(command)
+        return True
+    except:
+        return False
+
+
+os.chdir(qdir + '/fetchid')
+
+start = 0
+counter = 0
+
+while start == 0:
+    print('Fetching...')
+    cid = HT.fetch(qid)
+    print('Fetched ' + str(cid))
+
+    cinfo = HT.get(cid)
+    cfile = cinfo['file']
+    status = cinfo['stat']
+
+    if int(cid) <= 0:
+        print('No calculations left')
+        os.chdir(qdir +'/LOGFILES')
+        execute('touch '+str(qid)+'_fetch0')
+        sys.exit()
+
+    if int(status)==0:
+        fetchid = str(cid)+'_0'
+    else:
+        fetchid = str(cid)
+
+    print('Calculation status: '+str(status))
+
+    if not int(status)%2==0:
+        print('Uneven status: refetch a calculation.')
+    elif int(status)==20:
+        print('Do not prioritize DOS calculation: exit.')
+        execute('touch '+str(qid)+'_DOSexit')
+        sys.exit()
+    else:
+        sleep = random.randrange(20)
+        print('Random sleep... ZzZzZz for '+str(sleep)+' seconds, before touching fetchid.')
+        time.sleep(sleep)
+
+        if not os.path.isfile(fetchid):
+            execute('touch ' + str(fetchid))
+            print('Fetched a good one!')
+
+            sleep = random.randrange(20)
+            print('Random sleep... ZzZzZz for '+str(sleep)+' seconds, before actually starting.')
+            time.sleep(sleep)
+
+#        if int(status)==0 and not os.path.isfile(str(cid)+'_0'):
+#            execute('mv '+str(cid) +' '+str(cid)+'_0')           
+#            print('Extra step for status 0: mv touched file.')    
+
+            start = HT.start(str(cid))
+            
+            if start==0:
+                print('Calculation start failed. Removing fetchid and restarting fetch cycle.')
+                remove(fetchid)
+            else:
+                print('Calculation started succesfully!')
+                counter = 0
+        else:
+            sleep = random.randrange(60)
+            print('fetchid '+str(cid)+' already exists, sleep '+str(sleep)+' seconds and restart fetch cycle.')
+            time.sleep(sleep) 
+    
+    counter = counter + 1
+    if counter==25:
+        print('Fetch-counter reached limit: exit!')
+        sys.exit()
+
+remove(fetchid)
+
+cid = HT.calcid
+
+cinfo = HT.get(cid)
+cfile = cinfo['file']
+status = int(cinfo['stat'])
+
+#settings = json.loads(cinfo['settings'])
+print 'THE STAT is' + str(status)
+if status == 1:
+    settings = template.get(182)
+else:
+    settings = template.get(183)
+
+INCAR_dict = settings['INCAR']
+KPOINTS_dict = settings['KPOINTS']
+
+if int(qid) in [149,150,155,156]:
+    INCAR_dict['ENCUT'] = 600
+
+print('Server: '+cinfo['server'])
+
+if INCAR_dict['LHFCALC'] == '.TRUE.':
+    test = 'junkstrign'
+elif cinfo['server']=='gastly' or cinfo['server']=='haunter':
+    INCAR_dict['NCORE'] = '8'
+elif cinfo['server'] == 'golett' or cinfo['server'] == 'phanpy':
+    INCAR_dict['NCORE'] = '24'
+    print('NCORE = 24')
+else:
+    INCAR_dict['NCORE'] = '16'
+    print('NCORE = 16')
+
+INCAR_dict['KPAR'] = argv[3]
+
+#print('Updating settings (NPAR)')
+#HT.updateSettings(settings, cid)
+
+if status== 1:
+    print('STEP 1 started')
+    print('ISIF7')
+
+    step = 1
+
+    os.chdir(qdir+'/CALCULATIONS')
+    mkdir(str(cfile))
+    
+    os.chdir(qdir+'/CALCULATIONS/'+str(cfile))
+
+    mkdir('./STEP1')
+    os.chdir('./STEP1')
+
+    shutil.copy(qdir + '/import/' + str(cfile) + '.vasp', './POSCAR')
+    poscar = open('POSCAR','r')
+    lines = poscar.readlines()
+    elements = lines[5][:-1].lstrip()
+
+    magel = set(['O','Ni','Cr','Co','Fe','Mn','Ce','Nd','Sm','Eu','Gd','Tb','Dy','Ho','Er','Tm']);
+    relel = set(['Cs','Ba','La','Lu','Hf','Ta','W','Re','Os','Ir','Pt','Au','Hg','Tl','Pb','Bi','Po','At','Rn']);
+##----------------------------------------------------------------------------------------------------------
+
+
+
+    magnetic = False;
+    relativistic = False;
+
+    for magn in magel:
+        if magn in elements.split(' '):
+             magnetic = True;
+    
+    for rel in relel:
+        if rel in elements.split(' '):
+            relativistic = True; 
+
+    if magnetic:
+        INCAR_dict['ISPIN'] = '2'
+        INCAR_dict['MAGMOM'] = '1*1.5 63*0.0'
+
+    settings = {'INCAR':INCAR_dict, 'KPOINTS':KPOINTS_dict}        
+    HighThroughput.io.VASP.writeKPOINTS(KPOINTS_dict, os.getcwd())
+    HighThroughput.io.VASP.writeINCAR(INCAR_dict, os.getcwd())
+
+    execute('POTgen ' + str(elements))
+    
+    poscar.close()
+
+    execute('free -m; date; touch CHGCAR WAVECAR')
+    remove(''+ qdir+'/CALCULATIONS/' + str(cfile) + '/STEP' +str(step)+ '/tempout')
+       
+    execute('mympirun --output ' +qdir+'/CALCULATIONS/' + str(cfile) + '/STEP'+str(step)+'/tempout vasp')
+        
+    execute('free -m; date')
+
+    print('END STATUS 1 / STEP 1')
+
+elif status==3:
+    print('STEP 3 started')
+    print('= STEP2: ISIF3')
+    
+    step = 2
+
+    os.chdir(qdir+'/CALCULATIONS/'+str(cfile))
+    if os.path.isdir('./STEP'+str(step)):
+        os.rmdir('./STEP'+str(step))
+    mkdir('./STEP'+str(step))
+    os.chdir('./STEP'+str(step))
+
+    shutil.copy('../STEP'+str(step-1)+'/CONTCAR', './POSCAR')
+    shutil.copy('../STEP'+str(step-1)+'/POTCAR', './POTCAR')
+    shutil.copy('../STEP'+str(step-1)+'/CHGCAR', './CHGCAR')
+    #shutil.copy('../STEP'+str(step-1)+'/WAVECAR', './WAVECAR')
+    poscar = open('POSCAR','r')
+    lines = poscar.readlines()
+    elements = lines[5][:-1].lstrip()
+
+    magel = set(['O','Ni','Cr','Co','Fe','Mn','Ce','Nd','Sm','Eu','Gd','Tb','Dy','Ho','Er','Tm']);
+    relel = set(['Cs','Ba','La','Lu','Hf','Ta','W','Re','Os','Ir','Pt','Au','Hg','Tl','Pb','Bi','Po','At','Rn']);
+##----------------------------------------------------------------------------------------------------------
+
+
+
+    magnetic = False;
+    relativistic = False;
+
+    for magn in magel:
+        if magn in elements.split(' '):
+             magnetic = True;
+
+    for rel in relel:
+        if rel in elements.split(' '):
+            relativistic = True; 
+
+    if magnetic:
+        INCAR_dict['ISPIN'] = '2' 
+
+    settings = {'INCAR':INCAR_dict, 'KPOINTS':KPOINTS_dict}
+    
+    HighThroughput.io.VASP.writeKPOINTS(KPOINTS_dict, os.getcwd())
+    HighThroughput.io.VASP.writeINCAR(INCAR_dict, os.getcwd())
+
+    execute('free -m; date; touch CHGCAR WAVECAR')
+    remove(''+ qdir+'/CALCULATIONS/' + str(cfile) + '/STEP' +str(step)+ '/tempout')
+
+    execute('mympirun --output ' +qdir+'/CALCULATIONS/' + str(cfile) + '/STEP'+str(step)+'/tempout vasp')
+
+    execute('free -m; date')
+
+    print('END STATUS 3 / STEP 2')
+
+else:
+    print('Not a valid status. Calculation terminated.')
+    sys.exit()
+
+
+#UPDATE POTCAR INFO
+
+POTCAR_version = execute('grep -a \'TITEL\' POTCAR | awk \'{ print $4 }\'')
+settings['POTCAR'] = POTCAR_version.strip().replace('\n',', ')
+
+#END CALCULATION AND FETCH RESULTS
+
+energy = execute('grep \'energy  without entropy\'  OUTCAR | tail -1 | awk \'{ print $4 }\'')
+
+if 'error' in locals():
+    HT.updateResults({'error':error}, cid)
+elif energy=='' or not 'energy' in locals():
+    HT.updateResults({'error':'Energy missing'}, cid)
+    print('Energy missing! Error...')
+elif not os.path.isfile('CHGCAR') and not os.path.isfile('CHG'):
+    HT.updateResults({'error':'CHGCAR and CHG missing. VASP Error?'}, cid)
+    print('CHGCAR/CHG missing. VASP Error?')
+else:
+    print('Energy OK. Ending calculation, deleting junk files and fetching results.')
+    HT.end(cid)
+
+    if status<19:
+        os.remove('CHG')
+
+    results = HT.getResults(cid)
+
+    #could leave this out when working with QZP's
+
+    numberofatoms = lines[6][:-1].lstrip()
+    numberofatoms = " ".join(numberofatoms.split())
+    numberofatoms = sum(map(int, numberofatoms.split(' ')))
+
+    energy = float(energy)
+
+    if step == 1:
+        results['E0PBE'] = energy
+    else:
+        results['E0HSE06'] = energy
+        results['E0PBE'] = float(execute('grep \'energy  without entropy\'  ../STEP1/OUTCAR | tail -1 | awk \'{ print $4 }\''))
+
+
+
+    print('Updating results')
+    print results
+    HT.updateResults(results, cid)
+
+print('Updating settings')
+print settings
+HT.updateSettings(settings, cid)
+
+
+#RELOOP to the script
+
+cid_new = HT.fetch(qid)
+
+print('Fetched calculation '+str(cid_new)+' from queue '+str(qid)+'.')
+
+os.chdir(qdir+'/LOGFILES')
+
+if int(cid_new) > 0:
+#    print('Script ONCE: do not submit new job')
+    execute('vaspsubmit ' + str(qid) + ' ' + str(submit_arg))
+else:
+    print('No calculations left; end script without submitting new job.')
+    execute('touch '+str(qid)+'_'+str(cid)+'_fetch0')
+
+execute('qstat')
