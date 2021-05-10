@@ -54,7 +54,7 @@ def mysql_query(query,blob=''):
     headers = {"Content-type": "application/x-www-form-urlencoded","Accept": "text/plain"}
     params = urllib.parse.urlencode({'query' : query.replace('<','%3C').replace('>','%3E'), 'blob' : blob, 'email' : login['email'], 'token' : login['token']}, quote_via=urllib.parse.quote_plus)
     params.encode('utf-8')
-    conn.request('APIPATH',params,headers)
+    conn.request('POST','APIPATH',params,headers)
     response = None
     response = conn.getresponse().read()
     try: 
