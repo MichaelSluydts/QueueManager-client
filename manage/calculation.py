@@ -138,7 +138,8 @@ def add(material,queue,priority = '',settings = None,results = None, status = 0)
     queue = mysql_query('SELECT `id`, `name` FROM `queues` WHERE `id` = ' + str(queue))
 
     if(int(result) > 0):
-        mysql_query('UPDATE `calculations` SET `leaf` = 0 WHERE `id` = ' + str(oldcid))
+        if status > 0:
+            mysql_query('UPDATE `calculations` SET `leaf` = 0 WHERE `id` = ' + str(oldcid))
         print('Added calculation for material ' + str(material) + ' (' + str(cid) + ') to the ' + queue['name'] + ' queue (' + str(queue['id']) + ') as calculation ' + str(cid)  + '.')
     else:
         print('Adding calculation for material ' + str(material) + ' to the ' + queue['name']  + ' queue (' + str(queue['id']) + ') failed.')
